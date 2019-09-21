@@ -185,30 +185,35 @@ object ArcosMain {
         spark.sql(
           """
             |select
-            |    STATE as state_fips,
-            |    STATECODE as state_code,
-            |    COUNTY as county_fips,
-            |    NAME as county_name,
-            |    concat(STATE, '-', COUNTY) as state_county_fips,
-            |    DRUG_NAME as drug_name,
-            |    weekIndex(TRANSACTION_DATE) as week_index,
-            |    yearindex(TRANSACTION_DATE) as year_index,
-            |    getPopulation(TRANSACTION_DATE, POPESTIMATE2006, POPESTIMATE2007, POPESTIMATE2008, POPESTIMATE2009, POPESTIMATE2010, POPESTIMATE2011, POPESTIMATE2012) as population, -- using 2010 population for 2006-2009 as we don't have those datapoints
-            |    dos_str as dosage_strength,
-            |    cast(count(1) as double) as order_count,
-            |    sum(QUANTITY) as pill_count,
-            |    sum(QUANTITY * coalesce(dos_str, 1.0)) as normalized_pill_count
-            |from arcos_with_pop
-            |group by
-            |    STATE,
-            |    STATECODE,
-            |    COUNTY,
-            |    NAME,
-            |    DRUG_NAME,
-            |    weekIndex(TRANSACTION_DATE),
-            |    yearindex(TRANSACTION_DATE),
-            |    getPopulation(TRANSACTION_DATE, POPESTIMATE2006, POPESTIMATE2007, POPESTIMATE2008, POPESTIMATE2009, POPESTIMATE2010, POPESTIMATE2011, POPESTIMATE2012),
-            |    dos_str
+            |    *,
+            |    pill_count / population as pill_count_per_capita
+            |from (
+            |    select
+            |        STATE as state_fips,
+            |        STATECODE as state_code,
+            |        COUNTY as county_fips,
+            |        NAME as county_name,
+            |        concat(STATE, '-', COUNTY) as state_county_fips,
+            |        DRUG_NAME as drug_name,
+            |        weekIndex(TRANSACTION_DATE) as week_index,
+            |        yearindex(TRANSACTION_DATE) as year_index,
+            |        getPopulation(TRANSACTION_DATE, POPESTIMATE2006, POPESTIMATE2007, POPESTIMATE2008, POPESTIMATE2009, POPESTIMATE2010, POPESTIMATE2011, POPESTIMATE2012) as population, -- using 2010 population for 2006-2009 as we don't have those datapoints
+            |        dos_str as dosage_strength,
+            |        cast(count(1) as double) as order_count,
+            |        sum(QUANTITY) as pill_count,
+            |        sum(QUANTITY * coalesce(dos_str, 1.0)) as normalized_pill_count
+            |    from arcos_with_pop
+            |    group by
+            |        STATE,
+            |        STATECODE,
+            |        COUNTY,
+            |        NAME,
+            |        DRUG_NAME,
+            |        weekIndex(TRANSACTION_DATE),
+            |        yearindex(TRANSACTION_DATE),
+            |        getPopulation(TRANSACTION_DATE, POPESTIMATE2006, POPESTIMATE2007, POPESTIMATE2008, POPESTIMATE2009, POPESTIMATE2010, POPESTIMATE2011, POPESTIMATE2012),
+            |        dos_str
+            |) x
             |""".stripMargin).write.parquet("s3://arcos-opioid/opioids/arcos_aggregated")
       }
       case "window" => {
@@ -218,9 +223,7 @@ object ArcosMain {
           """
             |select
             |    *,
-            |    toVector(collect_list(order_count) over w) as order_count_history,
-            |    toVector(collect_list(pill_count) over w) as pill_count_history,
-            |    toVector(collect_list(normalized_pill_count) over w) as normalized_pill_count_history
+            |    toVector(collect_list(pill_count_per_capita) over w) as pill_count_per_capita_history
             |from arcos_agg
             |window w as (partition by state_county_fips, drug_name order by week_index asc rows between 13 preceding and 1 preceding)
             |""".stripMargin).write.parquet("s3://arcos-opioid/opioids/arcos_windowed")

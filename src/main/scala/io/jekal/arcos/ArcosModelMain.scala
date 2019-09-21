@@ -2,7 +2,7 @@ package io.jekal.arcos
 
 import org.apache.spark.ml.{Pipeline, PipelineModel}
 import org.apache.spark.ml.evaluation.RegressionEvaluator
-import org.apache.spark.ml.feature.{IndexToString, StringIndexer, VectorAssembler, VectorIndexer}
+import org.apache.spark.ml.feature.{IndexToString, OneHotEncoderEstimator, StringIndexer, VectorAssembler, VectorIndexer}
 import org.apache.spark.ml.regression.{RandomForestRegressionModel, RandomForestRegressor}
 import org.apache.spark.ml.tuning.{CrossValidator, CrossValidatorModel, ParamGridBuilder}
 import org.apache.spark.sql.types.Metadata
@@ -22,9 +22,16 @@ object ArcosModelMain {
     arg match {
       case "train" => {
         val (drugNameIndexer, drugNameConverter) = stringIndexer("drug_name")
+        val (stateCodeIndexer, stateCodeConverter) = stringIndexer("state_code")
+        val (stateCountyIndexer, stateCountyConverter) = stringIndexer("state_county_fips")
+
+        val oneHot = new OneHotEncoderEstimator().
+          setInputCols(Array("drug_name_indexed", "state_code_indexed", "state_county_fips_indexed")).
+          setOutputCols(Array("drug_name_one_hot", "state_code_one_hot", "state_county_fips_one_hot")).
+          setHandleInvalid("keep")
 
         val assembler = new VectorAssembler().
-          setInputCols(Array("drug_name_indexed", "week_index", "year_index", "population", "dosage_strength", "order_count_history", "pill_count_history", "normalized_pill_count_history")).
+          setInputCols(Array("drug_name_one_hot", "state_code_one_hot", "state_county_fips_one_hot", "week_index", "year_index", "population", "dosage_strength", "pill_count_per_capita_history")).
           setOutputCol("assembledFeatures")
 
         val indexer = new VectorIndexer().
@@ -32,14 +39,13 @@ object ArcosModelMain {
           setOutputCol("features").
           setMaxCategories(4)
 
-        // val order_count_pipeline = pipelineIt("order_count")
-        val pill_count_pipeline = pipelineIt("pill_count")
-        // val normalized_pill_count_pipeline = pipelineIt("normalized_pill_count")
+        val pill_count_per_capita_pipeline = pipelineIt("pill_count_per_capita")
 
-        val pipeline = new Pipeline().setStages(Array(drugNameIndexer, assembler, indexer, /* order_count_pipeline, */ pill_count_pipeline, /* normalized_pill_count_pipeline, */ drugNameConverter))
+        val stages = Array(drugNameIndexer, stateCodeIndexer, stateCountyIndexer, oneHot, assembler, indexer, pill_count_per_capita_pipeline, drugNameConverter, stateCodeConverter, stateCountyConverter)
+        val pipeline = new Pipeline().setStages(stages)
 
         val model = pipeline.fit(trainingData)
-        model.save("s3://arcos-opioid/opioids/model")
+        model.save("s3://arcos-opioid/opioids/models")
 
         val predictions = model.transform(testData)
         val trainingPredictions = model.transform(trainingData)
@@ -48,27 +54,28 @@ object ArcosModelMain {
         trainingPredictions.write.parquet("s3://arcos-opioid/opioids/predictions/training")
       }
       case "stats" => {
-        val model = PipelineModel.load("s3://arcos-opioid/opioids/model")
-        println(model.stages(3).asInstanceOf[CrossValidatorModel].bestModel.asInstanceOf[PipelineModel].stages(0).explainParams())
+        val model = PipelineModel.load("s3://arcos-opioid/opioids/models")
+        val crossValidatorIndex = 5
+        println(model.stages(crossValidatorIndex).asInstanceOf[CrossValidatorModel].bestModel.asInstanceOf[PipelineModel].stages(0).explainParams())
 
         val predictions = spark.read.parquet("s3://arcos-opioid/opioids/predictions/test")
         val trainingPredictions = spark.read.parquet("s3://arcos-opioid/opioids/predictions/training")
 
-        // evaluate("order_count", predictions, trainingPredictions)
-        evaluate("pill_count", predictions, trainingPredictions)
-        // evaluate("normalized_pill_count", predictions, trainingPredictions)
+        evaluate("pill_count_per_capita", predictions, trainingPredictions)
 
         arcos_windowed.describe().show(false)
+        predictions.show(false)
+        trainingPredictions.show(false)
 
-        // printFatureImportances("order_count", model.stages(3).asInstanceOf[PipelineModel].stages(0).asInstanceOf[RandomForestRegressionModel], predictions)
-        printFatureImportances("pill_count", model.stages(/* 4 */ 3).asInstanceOf[CrossValidatorModel].bestModel.asInstanceOf[PipelineModel].stages(0).asInstanceOf[RandomForestRegressionModel], predictions)
-        // printFatureImportances("normalized_pill_count", model.stages(5).asInstanceOf[PipelineModel].stages(0).asInstanceOf[RandomForestRegressionModel], predictions)
+        printFatureImportances("pill_count_per_capita", model.stages(crossValidatorIndex).asInstanceOf[CrossValidatorModel].bestModel.asInstanceOf[PipelineModel].stages(0).asInstanceOf[RandomForestRegressionModel], predictions)
       }
       case "report" => {
         val predictions = spark.read.parquet("s3://arcos-opioid/opioids/predictions/test")
         val trainingPredictions = spark.read.parquet("s3://arcos-opioid/opioids/predictions/training")
         val allPredictions = trainingPredictions.union(predictions)
-        val anomalies = allPredictions.where(!$"pill_count".between($"pill_count_prediction" / 2, $"pill_count_prediction" * 2))
+        val stdDev = allPredictions.select(stddev($"pill_count_per_capita")).collect()(0).getAs[Double](0)
+        println(s"Std Dev of pill_count_per_capita: $stdDev")
+        val anomalies = allPredictions.where(!$"pill_count_per_capita".between($"pill_count_per_capita_prediction" - stdDev, $"pill_count_per_capita_prediction" + stdDev))
         anomalies.show(false)
         anomalies.write.parquet("s3://arcos-opioid/opioids/anomalies")
       }
@@ -91,7 +98,7 @@ object ArcosModelMain {
       setEstimator(pipeline).
       setEvaluator(ev).
       setEstimatorParamMaps(paramGrid).
-      setNumFolds(10).
+      setNumFolds(5).
       setParallelism(2)
   }
 
