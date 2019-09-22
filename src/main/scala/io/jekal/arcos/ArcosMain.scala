@@ -228,6 +228,72 @@ object ArcosMain {
             |window w as (partition by state_county_fips, drug_name order by week_index asc rows between 13 preceding and 1 preceding)
             |""".stripMargin).write.parquet("s3://arcos-opioid/opioids/arcos_windowed")
       }
+      case "dashboard" => {
+        val arcos_with_pop = spark.read.parquet("s3://arcos-opioid/opioids/arcos_with_pop/stage_1/populated", "s3://arcos-opioid/opioids/arcos_with_pop/stage_2/populated", "s3://arcos-opioid/opioids/arcos_with_pop/stage_3/populated").
+          withColumn("POPESTIMATE2006", $"POPESTIMATE2010").
+          withColumn("POPESTIMATE2007", $"POPESTIMATE2010").
+          withColumn("POPESTIMATE2008", $"POPESTIMATE2010").
+          withColumn("POPESTIMATE2009", $"POPESTIMATE2010")
+
+        arcos_with_pop.createTempView("arcos_with_pop")
+
+        val zip = spark.read.
+          option("header", true).
+          option("mode", "FAILFAST").
+          schema(Schemas.zip).
+          csv("s3://arcos-opioid/opioids/zip_code_database.csv").
+          withColumn("decommissioned", expr("case when decommissioned = 1 then TRUE else FALSE end"))
+
+        zip.createTempView("zip")
+
+        spark.sql(
+          """
+            |select
+            |    arcos.spark_id,
+            |    arcos.BUYER_DEA_NO,
+            |    arcos.BUYER_BUS_ACT,
+            |    arcos.BUYER_NAME,
+            |    arcos.BUYER_ADDL_CO_INFO,
+            |    arcos.BUYER_ADDRESS1,
+            |    arcos.BUYER_ADDRESS2,
+            |    arcos.BUYER_CITY,
+            |    arcos.BUYER_STATE,
+            |    arcos.BUYER_ZIP,
+            |    arcos.BUYER_COUNTY,
+            |    arcos.TRANSACTION_CODE,
+            |    arcos.DRUG_CODE,
+            |    arcos.NDC_NO,
+            |    arcos.DRUG_NAME,
+            |    arcos.QUANTITY,
+            |    arcos.UNIT,
+            |    arcos.ACTION_INDICATOR,
+            |    arcos.ORDER_FORM_NO,
+            |    arcos.CORRECTION_NO,
+            |    arcos.STRENGTH,
+            |    arcos.TRANSACTION_DATE,
+            |    arcos.CALC_BASE_WT_IN_GM,
+            |    arcos.DOSAGE_UNIT,
+            |    arcos.TRANSACTION_ID,
+            |    arcos.Product_Name,
+            |    arcos.Ingredient_Name,
+            |    arcos.Measure,
+            |    arcos.MME_Conversion_Factor,
+            |    arcos.Combined_Labeler_Name,
+            |    arcos.Revised_Company_Name,
+            |    arcos.Reporter_family,
+            |    arcos.dos_str,
+            |    arcos.STATE as STATE_FIPS,
+            |    arcos.COUNTY as COUNTY_FIPS,
+            |    concat(arcos.STATE, '-', arcos.COUNTY) as STATE_COUNTY_FIPS,
+            |    arcos.NAME as COUNTY_NAME,
+            |    getPopulation(arcos.TRANSACTION_DATE, arcos.POPESTIMATE2006, arcos.POPESTIMATE2007, arcos.POPESTIMATE2008, arcos.POPESTIMATE2009, arcos.POPESTIMATE2010, arcos.POPESTIMATE2011, arcos.POPESTIMATE2012) as population, -- using 2010 population for 2006-2009 as we don't have those datapoints
+            |    zip.longitude as LONGITUDE,
+            |    zip.latitude as LATITUDE
+            |from arcos_with_pop arcos
+            |    join zip
+            |        on arcos.BUYER_ZIP = zip.zip
+            |""".stripMargin).write.option("compression", "gzip").json("s3://arcos-opioid/opioids/arcos_dashboard")
+      }
     }
 
     spark.stop()
