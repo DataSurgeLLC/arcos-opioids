@@ -46,7 +46,9 @@ object ArcosModelMain {
 
         val model = pipeline.fit(trainingData)
         model.save("s3://arcos-opioid/opioids/models")
-
+      }
+      case "predict" => {
+        val model = PipelineModel.load("s3://arcos-opioid/opioids/models")
         val predictions = model.transform(testData)
         val trainingPredictions = model.transform(trainingData)
 
