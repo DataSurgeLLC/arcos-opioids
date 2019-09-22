@@ -32,5 +32,7 @@ build
 *.class
 
 #docker volumes
-data/*
-!data/.keep
+dockers/spark/data/*
+!dockers/spark/data/.keep
+dockers/spark/conf/*
+!dockers/spark/conf/.keep
