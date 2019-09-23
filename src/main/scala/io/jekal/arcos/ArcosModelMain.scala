@@ -37,6 +37,7 @@ object ArcosModelMain {
         val indexer = new VectorIndexer().
           setInputCol("assembledFeatures").
           setOutputCol("features").
+          setHandleInvalid("keep").
           setMaxCategories(4)
 
         val pill_count_per_capita_pipeline = pipelineIt("pill_count_per_capita")
@@ -57,7 +58,7 @@ object ArcosModelMain {
       }
       case "stats" => {
         val model = PipelineModel.load("s3://arcos-opioid/opioids/models")
-        val crossValidatorIndex = 5
+        val crossValidatorIndex = 6
         println(model.stages(crossValidatorIndex).asInstanceOf[CrossValidatorModel].bestModel.asInstanceOf[PipelineModel].stages(0).explainParams())
 
         val predictions = spark.read.parquet("s3://arcos-opioid/opioids/predictions/test")
@@ -78,8 +79,24 @@ object ArcosModelMain {
         val stdDev = allPredictions.select(stddev($"pill_count_per_capita")).collect()(0).getAs[Double](0)
         println(s"Std Dev of pill_count_per_capita: $stdDev")
         val anomalies = allPredictions.where(!$"pill_count_per_capita".between($"pill_count_per_capita_prediction" - stdDev, $"pill_count_per_capita_prediction" + stdDev))
+        anomalies.cache()
         anomalies.show(false)
         anomalies.write.parquet("s3://arcos-opioid/opioids/anomalies")
+        anomalies.createTempView("anomalies")
+        spark.sql(
+          """
+            |select
+            |    STATE_COUNTY_FIPS,
+            |    count(*) as anomalies_count,
+            |    sum(abs(pill_count_per_capita - pill_count_per_capita_prediction)) as pill_count_per_capita_delta
+            |from anomalies
+            |group by
+            |    STATE_COUNTY_FIPS
+            |order by
+            |    count(*) desc
+            |limit 100
+            |""".stripMargin).write.parquet("s3://arcos-opioid/opioids/ranked_anomalies")
+        anomalies.unpersist()
       }
     }
   }
@@ -89,9 +106,8 @@ object ArcosModelMain {
     val pipeline = new Pipeline().setStages(Array(regressor))
 
     val paramGrid = new ParamGridBuilder().
-      addGrid(regressor.numTrees, Array(20, 50, 100)).
-      addGrid(regressor.maxDepth, Array(3, 7, 11)).
-      addGrid(regressor.minInfoGain, Array(0.0001, 0.001)).
+      addGrid(regressor.numTrees, Array(50, 100)).
+      addGrid(regressor.maxDepth, Array(7, 11)).
       build()
 
     val ev = evaluator(labelCol)
@@ -101,7 +117,7 @@ object ArcosModelMain {
       setEvaluator(ev).
       setEstimatorParamMaps(paramGrid).
       setNumFolds(5).
-      setParallelism(2)
+      setParallelism(4)
   }
 
   def randomForestRegressor(labelCol: String) = {

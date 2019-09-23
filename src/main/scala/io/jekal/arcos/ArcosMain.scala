@@ -193,7 +193,7 @@ object ArcosMain {
             |        STATECODE as state_code,
             |        COUNTY as county_fips,
             |        NAME as county_name,
-            |        concat(STATE, '-', COUNTY) as state_county_fips,
+            |        concat(STATE, COUNTY) as state_county_fips,
             |        DRUG_NAME as drug_name,
             |        weekIndex(TRANSACTION_DATE) as week_index,
             |        yearindex(TRANSACTION_DATE) as year_index,
@@ -284,7 +284,7 @@ object ArcosMain {
             |    arcos.dos_str,
             |    arcos.STATE as STATE_FIPS,
             |    arcos.COUNTY as COUNTY_FIPS,
-            |    concat(arcos.STATE, '-', arcos.COUNTY) as STATE_COUNTY_FIPS,
+            |    concat(arcos.STATE, arcos.COUNTY) as STATE_COUNTY_FIPS,
             |    arcos.NAME as COUNTY_NAME,
             |    getPopulation(arcos.TRANSACTION_DATE, arcos.POPESTIMATE2006, arcos.POPESTIMATE2007, arcos.POPESTIMATE2008, arcos.POPESTIMATE2009, arcos.POPESTIMATE2010, arcos.POPESTIMATE2011, arcos.POPESTIMATE2012) as population, -- using 2010 population for 2006-2009 as we don't have those datapoints
             |    zip.longitude as LONGITUDE,

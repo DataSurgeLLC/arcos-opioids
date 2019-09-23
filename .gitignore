@@ -36,3 +36,7 @@ dockers/spark/data/*
 !dockers/spark/data/.keep
 dockers/spark/conf/*
 !dockers/spark/conf/.keep
+dockers/elastic/logstash/data/*
+!dockers/elastic/logstash/data/.keep
+dockers/elastic/logstash/pipeline/*
+!dockers/elastic/logstash/pipeline/.keep

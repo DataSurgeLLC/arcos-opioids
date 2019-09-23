@@ -42,6 +42,7 @@ services:
     image: docker.elastic.co/logstash/logstash:7.3.2
     container_name: logstash
     volumes:
+      - ./logstash/data:/usr/share/logstash/data
       - ./logstash/pipeline:/usr/share/logstash/pipeline
     networks:
       - esnet
