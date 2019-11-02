@@ -1,16 +1,16 @@
 package io.jekal.arcos
 
-import org.apache.spark.ml.{Pipeline, PipelineModel}
 import org.apache.spark.ml.evaluation.RegressionEvaluator
-import org.apache.spark.ml.feature.{IndexToString, OneHotEncoderEstimator, StringIndexer, VectorAssembler, VectorIndexer}
+import org.apache.spark.ml.feature.{OneHotEncoderEstimator, VectorAssembler, VectorIndexer}
 import org.apache.spark.ml.regression.{RandomForestRegressionModel, RandomForestRegressor}
 import org.apache.spark.ml.tuning.{CrossValidator, CrossValidatorModel, ParamGridBuilder}
+import org.apache.spark.ml.{Pipeline, PipelineModel}
+import org.apache.spark.sql.functions.stddev
 import org.apache.spark.sql.types.Metadata
 import org.apache.spark.sql.{DataFrame, SparkSession}
-import org.apache.spark.sql.functions.stddev
 
 object ArcosModelMain {
-  def main(args: Array[String]) = {
+  def main(args: Array[String]): Unit = {
     val spark = SparkSession.builder().getOrCreate()
     import spark.implicits._
 
@@ -129,15 +129,7 @@ object ArcosModelMain {
   }
 
   def stringIndexer(inputCol: String) = {
-    val indexer = new StringIndexer().
-      setInputCol(inputCol).
-      setOutputCol(s"${inputCol}_indexed").
-      setHandleInvalid("keep")
-
-    val indexToString = new IndexToString().
-      setInputCol(s"${inputCol}_indexed").
-      setOutputCol(s"${inputCol}_converted")
-    (indexer, indexToString)
+    Utils.stringIndexer(inputCol)
   }
 
   def evaluate(labelCol: String, predictions: DataFrame, trainingPredictions: DataFrame) = {

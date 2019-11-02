@@ -1,38 +1,20 @@
 package io.jekal.arcos
 
-import java.sql.Date
-
-import org.apache.spark.sql.{DataFrame, SparkSession}
-import org.apache.spark.sql.functions.{col, expr, monotonically_increasing_id, regexp_replace, udf, upper}
-import org.apache.spark.sql.types.{DateType, DoubleType, IntegerType, LongType, StringType, StructField, StructType}
+import io.jekal.arcos.udfs.Udfs
 import org.apache.spark.ml.Pipeline
-import org.apache.spark.ml.feature.{HashingTF, MinHashLSH, MinHashLSHModel, NGram, RegexTokenizer}
-import org.apache.spark.ml.linalg.Vectors
+import org.apache.spark.ml.feature._
+import org.apache.spark.sql.functions._
+import org.apache.spark.sql.types._
+import org.apache.spark.sql.{DataFrame, SparkSession}
 
 object ArcosMain {
-  def main(args: Array[String]) = {
+  def main(args: Array[String]): Unit = {
     val stepName = if (args.size == 0) "stage1" else args(0)
 
     val spark = SparkSession.builder().getOrCreate()
     import spark.implicits._
 
-    spark.sqlContext.udf.register("getStateCode", (state: String) => StateMap.stateCode(state))
-    spark.sqlContext.udf.register("weekIndex", (date: Date) => {
-      val referenceDate = new Date(2006 - 1900, 0, 1)
-      val difference = (date.getTime - referenceDate.getTime)/86400000;
-      difference / 7;
-    })
-    spark.sqlContext.udf.register("yearIndex", (date: Date) => {
-      val referenceDate = new Date(2006 - 1900, 0, 1)
-      date.getYear - referenceDate.getYear
-    })
-    spark.sqlContext.udf.register("getPopulation", (transactionDate: Date, population2006: Long, population2007: Long, population2008: Long, population2009: Long, population2010: Long, population2011: Long, population2012: Long) => {
-      val populationsByYear = Array(population2006, population2007, population2008, population2009, population2010, population2011, population2012)
-      val referenceDate = new Date(2006 - 1900, 0, 1)
-      val index = transactionDate.getYear - referenceDate.getYear
-      populationsByYear(index)
-    })
-    spark.sqlContext.udf.register("toVector", (array: Seq[Double]) => Vectors.dense(array.padTo(13, 0.0D).toArray))
+    Udfs.register(spark)
 
     val pop = spark.read.
       option("header", true).

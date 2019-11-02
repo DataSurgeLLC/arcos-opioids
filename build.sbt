@@ -5,10 +5,10 @@ version := "0.1"
 scalaVersion := "2.11.12"
 
 // https://mvnrepository.com/artifact/org.apache.spark/spark-sql
-libraryDependencies += "org.apache.spark" %% "spark-sql" % "2.3.1" % "provided"
+libraryDependencies += "org.apache.spark" %% "spark-sql" % "2.4.3" % "provided"
 
 // https://mvnrepository.com/artifact/org.apache.spark/spark-mllib
-libraryDependencies += "org.apache.spark" %% "spark-mllib" % "2.3.1" % "provided"
+libraryDependencies += "org.apache.spark" %% "spark-mllib" % "2.4.3" % "provided"
 
 // https://spark.apache.org/docs/latest/ml-guide.html#dependencies
 // https://mvnrepository.com/artifact/com.github.fommil.netlib/all

@@ -621,7 +621,7 @@ data.groupBy($"HAS_POPULATION").count.show
 data.groupBy($"HAS_POPULATION").agg(sum($"QUANTITY")).show
 
 arcos.count
-178598026
+178,598,026
 
 
 time spark-submit --class io.jekal.arcos.ArcosMain s3://arcos-opioid/opioids/jars/arcos_2.11.12-0.1-uber.jar stage1

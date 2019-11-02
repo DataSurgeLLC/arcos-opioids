@@ -33,7 +33,7 @@ server.host: 0.0.0.0
 #elasticsearch.hosts: ["http://localhost:9200"]
 elasticsearch.hosts:
   - http://es01:9200
-  - http://es02:900
+  - http://es02:9200
 
 # When this setting's value is true Kibana uses the hostname specified in the server.host
 # setting. When the value of this setting is false, Kibana uses the hostname of the host

@@ -15,7 +15,7 @@ numTrees: Number of trees to train (>= 1) (default: 20, current: 100)
 predictionCol: prediction column name (default: prediction, current: pill_count_per_capita_prediction)
 seed: random seed (default: 235498149)
 subsamplingRate: Fraction of the training data used for learning each decision tree, in range (0, 1]. (default: 1.0)
-Root Mean Squared Error (RMSE) on test data (pill_count_per_capita) = 7.10412059417275E-4
+Root Mean Squared Error (RMSE) on test data (pill_count_per_capita) = 7.10412059417275E-4 = 0.00071
 Root Mean Squared Error (RMSE) on training data (pill_count_per_capita) = 5.03271550985684E-4
 +-------+------------------+----------+------------------+----------------+-----------------+-----------+------------------+------------------+------------------+------------------+------------------+------------------+---------------------+---------------------+
 |summary|state_fips        |state_code|county_fips       |county_name     |state_county_fips|drug_name  |week_index        |year_index        |population        |dosage_strength   |order_count       |pill_count        |normalized_pill_count|pill_count_per_capita|
